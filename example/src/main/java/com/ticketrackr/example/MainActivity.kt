@@ -9,10 +9,13 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.ComponentActivity
+import com.ticketrackr.android.SupportButton
 import com.ticketrackr.android.SupportListener
-import com.ticketrackr.android.TicketRackr
 
-/** Two ways in: a Help button that opens support on a screen of its own, and support inside a screen of yours. */
+/**
+ * Two ways in: the SDK's Help button, which opens support on a screen of its own and badges unread replies, and support
+ * inside a screen of yours.
+ */
 class MainActivity : ComponentActivity() {
     private val log = mutableListOf<String>()
     private lateinit var events: TextView
@@ -24,17 +27,14 @@ class MainActivity : ComponentActivity() {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
             setTextColor(Color.BLACK)
         }
-        val help = Button(this).apply {
-            text = "Help"
-            isAllCaps = false
-            setOnClickListener {
-                note("opened")
-                TicketRackr.openSupport(this@MainActivity, supportLinks(intent), listener = object : SupportListener {
-                    override fun onReady() = note("ready")
-                    override fun onUnreadChange(count: Int) = note("unread $count")
-                    override fun onClose() = note("closed")
-                })
-            }
+        val help = SupportButton(this).apply {
+            setup(supportLinks(intent), listener = object : SupportListener {
+                override fun onReady() = note("ready")
+                override fun onUnreadChange(count: Int) = note("unread $count")
+                override fun onClose() = note("closed")
+            })
+            // Hears the tap; support opens after it.
+            setOnClickListener { note("opened") }
         }
         val inView = Button(this).apply {
             text = "Support in a view"
@@ -46,12 +46,16 @@ class MainActivity : ComponentActivity() {
             gravity = Gravity.CENTER
             contentDescription = "log"
         }
+        val spaced = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            val space = (12 * resources.displayMetrics.density).toInt()
+            setMargins(0, space, 0, space)
+        }
         setContentView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setBackgroundColor(Color.WHITE)
             addView(title)
-            addView(help)
+            addView(help, spaced)
             addView(inView)
             addView(events)
         })

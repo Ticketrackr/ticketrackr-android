@@ -9,7 +9,7 @@ Views or Compose, Android 7.0 (API 24) or later.
 ```kotlin
 // build.gradle.kts
 dependencies {
-    implementation("com.ticketrackr:support-android:0.2.0")
+    implementation("com.ticketrackr:support-android:0.3.0")
 }
 ```
 
@@ -44,7 +44,28 @@ val getSupportLink = SupportLinkProvider { callback ->
 }
 ```
 
-**Support on a screen of its own**, with Close (and the back button):
+**A Help button**, which opens support on a screen of its own and badges the customer's unread replies:
+
+```kotlin
+val help = SupportButton(this)
+help.setup(getSupportLink)
+```
+
+Or place it in a layout and set it up in code:
+
+```xml
+<com.ticketrackr.android.SupportButton
+    android:id="@+id/help"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    app:ticketrackrColor="#16776B" />
+```
+
+```kotlin
+findViewById<SupportButton>(R.id.help).setup(getSupportLink)
+```
+
+**Support on a screen of its own**, from a button of yours, with Close (and the back button):
 
 ```kotlin
 helpButton.setOnClickListener {
@@ -65,6 +86,8 @@ support.show(getSupportLink)
 **Compose:**
 
 ```kotlin
+AndroidView(factory = { SupportButton(it).apply { setup(getSupportLink) } })
+// or a button of yours:
 Button(onClick = { TicketRackr.openSupport(context, getSupportLink) }) { Text("Help") }
 // or inline:
 AndroidView(factory = { TicketRackrSupportView(it).apply { show(getSupportLink) } }, onRelease = { it.destroy() })
@@ -73,6 +96,8 @@ AndroidView(factory = { TicketRackrSupportView(it).apply { show(getSupportLink) 
 **Java:**
 
 ```java
+helpButton.setup(callback -> yourApi.supportLink(callback::onLink, callback::onError));
+// or a button of yours:
 TicketRackr.openSupport(this, callback -> yourApi.supportLink(callback::onLink, callback::onError));
 ```
 
@@ -83,9 +108,36 @@ TicketRackr.openSupport(this, callback -> yourApi.supportLink(callback::onLink, 
 | `getSupportLink` | Required. Calls your endpoint and passes the link's `url` to `callback.onLink` (or `onError`). Called on open, and again if the session ends. |
 | `SupportOptions(requestType = …)` | Open the form for one request type, by its key, such as a report: `"report_problem"`. |
 | `SupportOptions(subject = …, fields = …)` | Fill in the request's subject and its type's fields (by key). |
+| `SupportOptions(ticket = …)` | Open one of the customer's requests, by its id: `ticket.id` from the `ticket.message.created` webhook, for example when the customer taps a notification about a reply. Another customer's request isn't opened; support shows their own requests instead. |
 | `SupportOptions(language = …)` | `en`, `es`, `fr`, `de` or `pt`. The device's language when left out. |
 | `SupportListener` | `onReady`, `onUnreadChange(count)` and `onClose` (its Close button, or Back on support's own screen). |
 | `closable` | `TicketRackrSupportView.show` only: show a Close button. |
+| `label` (`android:text`) | `SupportButton` only: its text. "Help", in the support language, when left out. |
+| `color` (`app:ticketrackrColor`) | `SupportButton` only: its color, your brand color. `#16776B` when left out. |
+
+## Unread replies
+
+The Help button's badge counts the customer's unread replies even while support is closed: an agent's answer shows
+on the button before the customer opens support again. Each time support opens, it leaves a token that reads only that
+count, for 30 days. The button asks TicketRackr with it when it appears and when your app comes back to the
+foreground, at most once a minute. It needs no support link and no session, so it costs you nothing.
+
+For a badge of your own (a tab bar, a menu), ask for the count. It comes on the main thread, and it's `null` when it
+isn't known (support hasn't opened on this device yet):
+
+```kotlin
+TicketRackr.unreadCount(context) { count -> tabBadge.text = count?.takeIf { it > 0 }?.toString() }
+```
+
+```java
+TicketRackr.unreadCount(this, count -> { /* null when it isn't known */ });
+```
+
+When your app's user signs out, forget their count, so the next person on the device doesn't see it:
+
+```kotlin
+TicketRackr.signOut(context)
+```
 
 ## Request types and reports
 
@@ -103,7 +155,7 @@ Settings → Companies → Support page. They appear in your app right away, wit
   (`AppCompatActivity` is one) for it.
 - On support's own screen, support stays inside the system bars and above the keyboard.
 - Support uses your brand color and logo from Settings → Companies → Support page.
-- `example/` is an app that shows both ways in.
+- `example/` is an app that shows both ways in: the Help button, and support inside a screen.
 - Full guide and the API: https://ticketrackr.com/docs/support-api#embedded-support
 
 ## License

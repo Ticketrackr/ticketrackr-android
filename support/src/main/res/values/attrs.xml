@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- SupportButton in a layout. -->
+    <declare-styleable name="SupportButton">
+        <!-- The button's text. "Help", in the support language, when left out. -->
+        <attr name="android:text" />
+        <!-- The button's color: your brand color. -->
+        <attr name="ticketrackrColor" format="color" />
+    </declare-styleable>
+</resources>

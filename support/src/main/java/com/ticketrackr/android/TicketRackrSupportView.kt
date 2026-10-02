@@ -42,6 +42,9 @@ import androidx.webkit.WebViewFeature
  * show on a screen with Back, files go to the system's downloads, and other sites, mail and phone links open in their
  * own apps. Call [destroy] when you're done with it.
  *
+ * It keeps the customer's unread count, and the token that reads it later, for [SupportButton]'s badge and
+ * [TicketRackr.unreadCount].
+ *
  * File uploads use the system's picker, which needs the view to be in a ComponentActivity (AppCompatActivity is one).
  */
 class TicketRackrSupportView @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null) : FrameLayout(context, attrs) {
@@ -89,7 +92,7 @@ class TicketRackrSupportView @JvmOverloads constructor(context: Context, attrs: 
      * Shows support.
      *
      * @param getSupportLink gets a new support link from your server.
-     * @param options what to open: a request type's form, filled in, in a language.
+     * @param options what to open: a request type's form, filled in, or one of the customer's requests, in a language.
      * @param closable show a Close button, for support on a screen of its own; [SupportListener.onClose] hears it.
      */
     @JvmOverloads
@@ -169,7 +172,7 @@ class TicketRackrSupportView @JvmOverloads constructor(context: Context, attrs: 
         // The page tells the app what happened through window.TicketRackrSupportBridge (sdks/protocol, section 3).
         if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
             WebViewCompat.addWebMessageListener(web, BRIDGE, setOf(origin)) { _, message, sourceOrigin, isMainFrame, _ ->
-                if (isMainFrame && SupportOrigin.isSupport(sourceOrigin.toString(), origin)) message.data?.let(::received)
+                if (isMainFrame && SupportOrigin.isSupport(sourceOrigin.toString(), origin)) message.data?.let { received(it, origin) }
             }
         } else {
             web.addJavascriptInterface(Bridge(), BRIDGE)
@@ -183,13 +186,20 @@ class TicketRackrSupportView @JvmOverloads constructor(context: Context, attrs: 
         return web
     }
 
-    private fun received(data: String) {
+    /** An event from the support page at [origin]. */
+    private fun received(data: String, origin: String) {
         when (val event = SupportEvent.read(data) ?: return) {
             SupportEvent.Ready -> {
                 show()
                 listener?.onReady()
             }
-            is SupportEvent.Unread -> listener?.onUnreadChange(event.count)
+            is SupportEvent.Unread -> {
+                // Kept for the Help button's badge while support is closed (sdks/protocol, section 7).
+                UnreadChecks.badge(context).note(event.count)
+                listener?.onUnreadChange(event.count)
+            }
+            // What reads that count later, kept with the page it's for.
+            is SupportEvent.UnreadToken -> UnreadChecks.badge(context).keep(origin, event.token, event.expiresAt)
             SupportEvent.Close -> listener?.onClose()
             SupportEvent.SessionEnded -> if (reconnect.allow()) open() else show(failed = true)
         }
@@ -298,7 +308,7 @@ class TicketRackrSupportView @JvmOverloads constructor(context: Context, attrs: 
         fun postMessage(data: String) {
             main.post {
                 val origin = origin ?: return@post
-                if (SupportOrigin.isSupport(webView?.url, origin)) received(data)
+                if (SupportOrigin.isSupport(webView?.url, origin)) received(data, origin)
             }
         }
     }
@@ -312,16 +322,17 @@ class TicketRackrSupportView @JvmOverloads constructor(context: Context, attrs: 
             data.clipData?.let { clip -> return Array(clip.itemCount) { clip.getItemAt(it).uri } }
             return data.data?.let { arrayOf(it) }
         }
-
-        fun Context.findActivity(): Activity? {
-            var current: Context = this
-            while (current is ContextWrapper) {
-                if (current is Activity) return current
-                current = current.baseContext
-            }
-            return null
-        }
     }
+}
+
+/** The Activity a view's context belongs to (a view in a themed part of a layout gets a wrapper around it). */
+internal fun Context.findActivity(): Activity? {
+    var current: Context = this
+    while (current is ContextWrapper) {
+        if (current is Activity) return current
+        current = current.baseContext
+    }
+    return null
 }
 
 /** Another site, or a mail or phone link, in the app that opens it. */

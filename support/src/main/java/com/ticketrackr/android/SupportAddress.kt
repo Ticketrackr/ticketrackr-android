@@ -3,7 +3,7 @@ package com.ticketrackr.android
 import java.net.URI
 import java.net.URLDecoder
 
-/** What to open in support: one request type's form, filled in, in a language. */
+/** What to open in support: one request type's form, filled in, or one of the customer's requests, in a language. */
 data class SupportOptions @JvmOverloads constructor(
     /** Opens the form for one request type, by its key (Settings → Companies → Case types), such as a report. */
     val requestType: String? = null,
@@ -13,6 +13,11 @@ data class SupportOptions @JvmOverloads constructor(
     val fields: Map<String, String> = emptyMap(),
     /** `en`, `es`, `fr`, `de` or `pt`. The device's language when left out. */
     val language: String? = null,
+    /**
+     * Opens one of the customer's requests, by its id (`ticket.id` in the ticket.created and ticket.message.created
+     * webhooks), such as from a notification about a reply. Another customer's request isn't opened.
+     */
+    val ticket: String? = null,
 )
 
 /** A support link that isn't TicketRackr's support page. */
@@ -21,6 +26,7 @@ class SupportLinkException : IllegalArgumentException("TicketRackr: getSupportLi
 /** The address support is shown at (sdks/protocol, section 2). */
 object SupportAddress {
     private val FIELD_KEY = Regex("^[a-z][a-z0-9_]{0,63}$")
+    private val TICKET_ID = Regex("^[A-Za-z0-9_-]{1,128}$")
 
     /**
      * The support link in embedded mode, with what to open. [closable] adds a Close button; [edges] lets the page keep
@@ -38,6 +44,8 @@ object SupportAddress {
         options.requestType?.takeIf { it.isNotEmpty() }?.let { params += "type" to it }
         options.subject?.takeIf { it.isNotEmpty() }?.let { params += "subject" to it }
         for ((key, value) in options.fields.toSortedMap()) if (FIELD_KEY.matches(key)) params += "f.$key" to value.take(500)
+        // Only an id: anything else (a path, a query) is dropped, not sent.
+        options.ticket?.takeIf { TICKET_ID.matches(it) }?.let { params += "ticket" to it }
         // A later value replaces an earlier one of the same name; the link's own parameters come first.
         val names = params.map { it.first }.toSet()
         val kept = uri.rawQuery?.split('&')?.filter { it.isNotEmpty() && decode(it.substringBefore('=')) !in names }.orEmpty()
